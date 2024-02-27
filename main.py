@@ -1,53 +1,43 @@
-from brian2 import *
+from PIL import Image
+import os
+import numpy as np
 
-# Define the SNN parameters
-start_scope()
+def convert_to_bw_with_transparency(input_path, output_path):
+  # Open the image file
+  image = Image.open(input_path)
 
-# Neuron group with a simple threshold
-neuron_eqs = '''
-dv/dt = (0.2 - v) / 10 : 1 (unless refractory)
-'''
+  # Convert the image to RGBA (to handle transparency)
+  rgba_image = image.convert('RGBA')
 
-snn = NeuronGroup(2, neuron_eqs, threshold='v > 1', reset='v = 0', refractory=5*ms)
+  # Create a new image with a transparent background
+  transparent_image = Image.new('RGBA', rgba_image.size, (255, 255, 255, 0))
 
-# Define Hebbian learning rule
-alpha = 0.1  # learning rate
+  # Paste the original image onto the new image, using the alpha channel as a mask
+  transparent_image.paste(rgba_image, (0, 0), rgba_image)
 
-# Synaptic weights matrix
-w = Synapses(snn, snn, model='''w : 1''', on_pre='v_post += w')
-w.connect(i=0, j=1)  # Connect neuron 0 to neuron 1
+  # Convert to a binary image (black and white) with no background
+  bw_image = transparent_image.convert('1')
 
-# Hebbian learning rule
-learning_rule = '''
-            dw/dt = alpha * v_pre * v_post : 1 (event-driven)
-'''
+  # Get pixel data as a flattened array
+  pixel_data = np.array(bw_image.getdata())
 
-w_pre_post = Synapses(snn, snn, model=learning_rule, on_pre='w += dw')
-w_pre_post.connect(i=0, j=1)
+  # Reshape the data into a 2D array based on image size
+  width, height = bw_image.size
+  bw_array = pixel_data.reshape(height, width)
 
-# Set initial synaptic weight
-w.w = 0.5
+  # Optional: Save the final image for verification (unchanged)
+  bw_image.save(output_path)
 
-# Run the simulation
-snn_state = StateMonitor(snn, 'v', record=True)
-w_state = StateMonitor(w, 'w', record=True)
+  # Return the 2D array representing the black and white image
+  return bw_array
 
-run(100*ms)
+if __name__ == "__main__":
+  # Replace 'input.png' and 'output.png' with your file names
+  input_image_path = 'brian.png'
+  output_image_path = 'output1.png'
 
-# Plot the membrane potential and synaptic weights
-"""figure(figsize=(12, 6))
+  # Call the function and get the 2D array
+  bw_array = convert_to_bw_with_transparency(input_image_path, output_image_path)
 
-subplot(2, 1, 1)
-plot(snn_state.t/ms, snn_state.v[0], label='Neuron 0')
-plot(snn_state.t/ms, snn_state.v[1], label='Neuron 1')
-xlabel('Time (ms)')
-ylabel('Membrane Potential')
-legend()
-
-subplot(2, 1, 2)
-plot(w_state.t/ms, w_state.w[0], label='Synaptic Weight')
-xlabel('Time (ms)')
-ylabel('Weight')
-legend()
-
-show()"""
+  # Print the 2D array (example)
+  print(bw_array)
